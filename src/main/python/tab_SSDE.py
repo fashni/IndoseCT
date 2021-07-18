@@ -52,7 +52,7 @@ class SSDETab(QDialog):
 
     self.calc_btn = QPushButton('Calculate')
     self.save_btn = QPushButton('Save')
-  
+
     self.calc_btn.setAutoDefault(True)
     self.calc_btn.setDefault(True)
     self.save_btn.setAutoDefault(False)
@@ -151,7 +151,7 @@ class SSDETab(QDialog):
     y = self.ctx.app_data.convf
     xlabel = 'Dw' if self.ctx.app_data.mode==DW else 'Deff'
     title = 'Water Equivalent Diameter' if self.ctx.app_data.mode==DW else 'Effective Diameter'
-    self.figure = PlotDialog(par=self)
+    self.figure = PlotDialog()
     self.figure.actionEnabled(True)
     self.figure.trendActionEnabled(False)
     self.figure.plot(data, pen={'color': "FFFF00", 'width': 2}, symbol=None)
@@ -162,11 +162,23 @@ class SSDETab(QDialog):
     self.figure.setTitle(f'{title} - Conversion Factor')
     self.figure.show()
 
-  def plot_dialog_closed(self):
-    self.save_btn.setAutoDefault(True)
-    self.save_btn.setDefault(True)
-    self.calc_btn.setAutoDefault(False)
-    self.calc_btn.setDefault(False)
+  def switch_button_default(self, mode=0):
+    if mode==0:
+      self.calc_btn.setAutoDefault(True)
+      self.calc_btn.setDefault(True)
+      self.save_btn.setAutoDefault(False)
+      self.save_btn.setDefault(False)
+    elif mode==1:
+      self.save_btn.setAutoDefault(True)
+      self.save_btn.setDefault(True)
+      self.calc_btn.setAutoDefault(False)
+      self.calc_btn.setDefault(False)
+    else:
+      return
+    self.next_tab_btn.setAutoDefault(False)
+    self.next_tab_btn.setDefault(False)
+    self.prev_tab_btn.setAutoDefault(False)
+    self.prev_tab_btn.setDefault(False)
 
   def diameter_mode_handle(self, value):
     if value == DW:
@@ -223,6 +235,7 @@ class SSDETab(QDialog):
     self.effdose_edit.setText(f'{self.ctx.app_data.effdose:#.4f}')
     if self.show_graph:
       self.on_plot()
+    self.switch_button_default(mode=1)
 
   def on_plot(self):
     self.plot(self.data)
@@ -238,10 +251,7 @@ class SSDETab(QDialog):
     self.ctx.app_data.effdose = 0
     self.show_graph = False
     self.plot_chk.setCheckState(Qt.Unchecked)
-    self.calc_btn.setAutoDefault(True)
-    self.calc_btn.setDefault(True)
-    self.save_btn.setAutoDefault(False)
-    self.save_btn.setDefault(False)
+    self.switch_button_default()
     self.ctdiv_edit.setText(f'{self.ctx.app_data.CTDIv:#.4f}')
     self.diameter_edit.setText(f'{self.ctx.app_data.diameter:#.4f}')
     self.dlp_edit.setText(f'{self.ctx.app_data.DLP:#.4f}')

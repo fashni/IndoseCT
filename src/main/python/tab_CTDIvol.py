@@ -173,19 +173,7 @@ class CTDIVolTab(QDialog):
     self.ctdiv_c_edit.setReadOnly(True)
     self.dlp_c_edit.setReadOnly(True)
 
-    self.next_tab_btn.setAutoDefault(True)
-    self.next_tab_btn.setDefault(True)
-    self.prev_tab_btn.setAutoDefault(False)
-    self.prev_tab_btn.setDefault(False)
-    self.tcm_btn.setAutoDefault(False)
-    self.tcm_btn.setDefault(False)
-    self.scn_btn.setAutoDefault(False)
-    self.scn_btn.setDefault(False)
-    self.get_info_btn.setAutoDefault(False)
-    self.get_info_btn.setDefault(False)
-    self.calc_btn.setAutoDefault(False)
-    self.calc_btn.setDefault(False)
-
+    self.switch_button_default()
     self.set_layout()
 
   def set_layout(self):
@@ -263,6 +251,28 @@ class CTDIVolTab(QDialog):
     main_layout.addLayout(tab_nav)
 
     self.setLayout(main_layout)
+
+  def switch_button_default(self, mode=0):
+    if mode==0:
+      self.calc_btn.setAutoDefault(True)
+      self.calc_btn.setDefault(True)
+      self.next_tab_btn.setAutoDefault(False)
+      self.next_tab_btn.setDefault(False)
+    elif mode==1:
+      self.next_tab_btn.setAutoDefault(True)
+      self.next_tab_btn.setDefault(True)
+      self.calc_btn.setAutoDefault(False)
+      self.calc_btn.setDefault(False)
+    else:
+      return
+    self.prev_tab_btn.setAutoDefault(False)
+    self.prev_tab_btn.setDefault(False)
+    self.tcm_btn.setAutoDefault(False)
+    self.tcm_btn.setDefault(False)
+    self.scn_btn.setAutoDefault(False)
+    self.scn_btn.setDefault(False)
+    self.get_info_btn.setAutoDefault(False)
+    self.get_info_btn.setDefault(False)
 
   def plot_tcm(self):
     xlabel = 'TCM'
@@ -477,8 +487,11 @@ class CTDIVolTab(QDialog):
     self.set_app_data()
 
   def img_changed_handle(self, value):
-    if value and self.mode==2:
-      self.calculate(False)
+    if value:
+      if self.mode==2:
+        self.calculate(False)
+      if self.mode==0:
+        self.switch_button_default()
 
   def calculate(self, auto=True):
     if self.mode==0:
@@ -534,6 +547,7 @@ class CTDIVolTab(QDialog):
       self.scan_length = scan_length
       self.DLP = DLP
 
+    self.switch_button_default(mode=1)
     self.set_app_data()
 
   def set_app_data(self):
@@ -542,6 +556,7 @@ class CTDIVolTab(QDialog):
 
   def reset_fields(self):
     self.initVar()
+    self.switch_button_default()
     self.disable_warning = True
     if self.mode == 0:
       self.brand_cb.setCurrentIndex(0)
