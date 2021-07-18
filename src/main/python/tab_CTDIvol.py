@@ -3,7 +3,8 @@ from PyQt5.QtGui import QDoubleValidator, QFont
 from PyQt5.QtSql import QSqlTableModel
 from PyQt5.QtWidgets import (QComboBox, QDialog, QFormLayout, QGroupBox,
                              QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-                             QPushButton, QStackedLayout, QVBoxLayout, QWidget)
+                             QPushButton, QSpacerItem, QStackedLayout,
+                             QVBoxLayout, QWidget)
 
 from constants import *
 from Plot import PlotDialog
@@ -20,7 +21,6 @@ class CTDIVolTab(QDialog):
     self.initUI()
     self.setModel()
     self.sigConnect()
-    self.calculate()
 
   def initVar(self):
     self.CTDI = 0
@@ -64,7 +64,7 @@ class CTDIVolTab(QDialog):
     self.coll_query.setTable("COLLIMATION_DATA")
     self.coll_query.setFilter("SCANNER_ID=1")
     self.coll_query.select()
-    self.coll = self.coll_query.record(0).value("COL_VAL")
+    self.coll = self.coll_query.record(0).value("VALUE")
 
   def setModel(self):
     self.brand_cb.setModel(self.brand_query)
@@ -75,6 +75,9 @@ class CTDIVolTab(QDialog):
     self.volt_cb.setModelColumn(self.volt_query.fieldIndex("VOLTAGE"))
     self.coll_cb.setModel(self.coll_query)
     self.coll_cb.setModelColumn(self.coll_query.fieldIndex("COL_OPTS"))
+
+    self.on_brand_changed(0)
+    self.brand_items = [self.brand_cb.itemText(i).lower() for i in range(self.brand_cb.count())]
 
   def sigConnect(self):
     self.opts.activated[int].connect(self.on_set_method)
@@ -92,6 +95,8 @@ class CTDIVolTab(QDialog):
     self.ctdiv_d_edit.textChanged[str].connect(self.on_dicom_manual)
     self.tcm_btn.clicked.connect(self.on_get_tcm)
     self.scn_btn.clicked.connect(self.get_scan_length_dicom)
+    self.get_info_btn.clicked.connect(self.on_get_info)
+    self.calc_btn.clicked.connect(lambda: self.calculate(False))
     self.ctx.app_data.imgChanged.connect(self.img_changed_handle)
 
   def initUI(self):
@@ -120,6 +125,8 @@ class CTDIVolTab(QDialog):
     self.dlp_m_edit = QLineEdit('0')
     self.dlp_d_edit = QLineEdit('0')
 
+    self.get_info_btn = QPushButton('Get Info')
+    self.calc_btn = QPushButton('Calculate')
     self.tcm_btn = QPushButton('TCM')
     self.scn_btn = QPushButton('Scn Len')
     self.next_tab_btn = QPushButton('Next')
@@ -130,6 +137,13 @@ class CTDIVolTab(QDialog):
     self.scanner_cb.setPlaceholderText('[Unavailable]')
     self.volt_cb.setPlaceholderText('[Unavailable]')
     self.coll_cb.setPlaceholderText('[Unavailable]')
+
+    cbs = [
+      self.brand_cb,
+      self.scanner_cb,
+      self.volt_cb,
+      self.coll_cb
+    ]
 
     edits = [
       self.tube_current_edit,
@@ -149,7 +163,8 @@ class CTDIVolTab(QDialog):
     ]
 
     [edit.setValidator(QDoubleValidator()) for edit in edits]
-    [edit.setMaximumWidth(60) for edit in edits]
+    [edit.setMinimumWidth(100) for edit in edits]
+    [edit.setMinimumWidth(100) for edit in cbs]
     [edit.setAlignment(Qt.AlignRight) for edit in edits]
 
     self.mas_edit.setReadOnly(True)
@@ -166,6 +181,10 @@ class CTDIVolTab(QDialog):
     self.tcm_btn.setDefault(False)
     self.scn_btn.setAutoDefault(False)
     self.scn_btn.setDefault(False)
+    self.get_info_btn.setAutoDefault(False)
+    self.get_info_btn.setDefault(False)
+    self.calc_btn.setAutoDefault(False)
+    self.calc_btn.setDefault(False)
 
     self.set_layout()
 
@@ -190,25 +209,26 @@ class CTDIVolTab(QDialog):
     dicom_grpbox.setLayout(dicom_layout)
     dicom_grpbox.setFont(font)
 
+    btn_layout = QHBoxLayout()
+    btn_layout.addWidget(self.calc_btn)
+    btn_layout.addWidget(self.get_info_btn)
+
     calci_grpbox = QGroupBox('')
-    calci_layout = QFormLayout()
-    calci_layout.addRow(QLabel('Manufacturer'), self.brand_cb)
-    calci_layout.addRow(QLabel('Scanner'), self.scanner_cb)
-    calci_layout.addRow(QLabel('Voltage (kV)'), self.volt_cb)
-    h1 = QHBoxLayout()
-    h1.addWidget(self.tube_current_edit)
-    h1.addWidget(self.tcm_btn)
-    h1.addStretch()
-    calci_layout.addRow(QLabel('Tube Current (mA)'), h1)
-    calci_layout.addRow(QLabel('Rotation Time (s)'), self.rotation_time_edit)
-    calci_layout.addRow(QLabel('Pitch'), self.pitch_edit)
-    calci_layout.addRow(QLabel('Collimation (mm)'), self.coll_cb)
-    h2 = QHBoxLayout()
-    h2.addWidget(self.scan_length_c_edit)
-    h2.addWidget(self.scn_btn)
-    h2.addStretch()
-    calci_layout.addRow(QLabel('Scan Length (cm)'), h2)
-    calci_grpbox.setLayout(calci_layout)
+    calci_outer_layout = QVBoxLayout()
+    calci_inner_layout = QFormLayout()
+    calci_inner_layout.addRow(QLabel('Manufacturer'), self.brand_cb)
+    calci_inner_layout.addRow(QLabel('Scanner'), self.scanner_cb)
+    calci_inner_layout.addRow(QLabel('Voltage (kV)'), self.volt_cb)
+    calci_inner_layout.addRow(QLabel('Tube Current (mA)'), self.tube_current_edit)
+    calci_inner_layout.addRow(QLabel('Rotation Time (s)'), self.rotation_time_edit)
+    calci_inner_layout.addRow(QLabel('Pitch'), self.pitch_edit)
+    calci_inner_layout.addRow(QLabel('Collimation (mm)'), self.coll_cb)
+    calci_inner_layout.addRow(QLabel('Scan Length (cm)'), self.scan_length_c_edit)
+    calci_outer_layout.addLayout(calci_inner_layout)
+    calci_outer_layout.addSpacerItem(QSpacerItem(1,10))
+    calci_outer_layout.addLayout(btn_layout)
+    calci_outer_layout.addStretch()
+    calci_grpbox.setLayout(calci_outer_layout)
 
     calco_grpbox = QGroupBox('')
     calco_layout = QFormLayout()
@@ -312,6 +332,54 @@ class CTDIVolTab(QDialog):
     if self.mode == 0:
       self.scan_length_c_edit.setText(f'{self.scan_length:#.2f}')
 
+  def on_get_info(self):
+    if not self.ctx.isImage:
+      QMessageBox.warning(None, "Warning", "Open DICOM files first, or input manually")
+      return
+
+    def find_closest_value(array, number):
+      return min(array, key=lambda x:abs(x-number))
+
+    attrs = ['Manufacturer', 'ManufacturerModelName', 'KVP', 'XRayTubeCurrent', 'ExposureTime', 'SpiralPitchFactor', 'TotalCollimationWidth']
+    kv_pairs = {}
+    missing_data = {}
+    missing_attr = []
+    for attr in attrs:
+      try:
+        kv_pairs[attr] = self.ctx.dicoms[self.ctx.current_img-1][attr].value
+      except KeyError:
+        kv_pairs[attr] = 0
+        missing_attr.append(attr)
+
+    if kv_pairs[attrs[0]].lower() in self.brand_items:
+      brand_id = self.brand_items.index(kv_pairs[attrs[0]].lower())
+      self.brand_cb.setCurrentIndex(brand_id)
+      self.on_brand_changed(brand_id)
+      if kv_pairs[attrs[1]].lower() in self.scanner_items:
+        scanner_id = self.scanner_items.index(kv_pairs[attrs[1]].lower())
+        self.scanner_cb.setCurrentIndex(scanner_id)
+        self.on_scanner_changed(scanner_id)
+        volt_id = self.volt_items.index(find_closest_value(self.volt_items, kv_pairs[attrs[2]]))
+        coll_id = self.coll_items.index(find_closest_value(self.coll_items, kv_pairs[attrs[6]]))
+        self.volt_cb.setCurrentIndex(volt_id)
+        self.on_volt_changed(volt_id)
+        self.coll_cb.setCurrentIndex(coll_id)
+        self.on_coll_changed(coll_id)
+      else:
+        missing_data[attrs[1]] = kv_pairs[attrs[1]]
+    else:
+      missing_data[attrs[0]] = kv_pairs[attrs[0]]
+
+    self.tube_current_edit.setText(str(kv_pairs['XRayTubeCurrent']))
+    self.rotation_time_edit.setText(str(kv_pairs['ExposureTime']/1000))
+    self.pitch_edit.setText(str(kv_pairs['SpiralPitchFactor']))
+    self.get_scan_length_dicom()
+
+    if missing_attr:
+      QMessageBox.information(None, 'Missing Attribute', f"The image has no attribute '{', '.join(missing_attr)}'.\nPlease input them manually.")
+    if missing_data:
+      QMessageBox.information(None, 'No Data', f"Data for '{list(missing_data.keys())[0]}: {list(missing_data.values())[0]}' is unavailable.")
+
   def on_set_method(self, idx):
     self.disable_warning = False
     self.prev_mode = self.mode
@@ -324,6 +392,7 @@ class CTDIVolTab(QDialog):
 
     self.scanner_query.setFilter(f"BRAND_ID={self.brand_id}")
     self.on_scanner_changed(0)
+    self.scanner_items = [self.scanner_cb.itemText(i).lower() for i in range(self.scanner_cb.count())]
 
   def on_scanner_changed(self, sel):
     self.scanner_id = self.scanner_query.record(sel).value("ID")
@@ -336,47 +405,49 @@ class CTDIVolTab(QDialog):
       QMessageBox.warning(None, 'No Data', 'There is no collimation data for this scanner.')
     self.on_volt_changed(0)
     self.on_coll_changed(0)
+    self.volt_items = [float(self.volt_cb.itemText(i)) for i in range(self.volt_cb.count())]
+    self.coll_items = [float(self.coll_query.record(i).value("COL_VAL")) for i in range(self.coll_cb.count())]
 
   def on_volt_changed(self, sel):
     phantom = 'head' if self.ctx.phantom==HEAD else 'body'
     self.CTDI = self.volt_query.record(sel).value(f"CTDI_{phantom.upper()}")
     if not self.CTDI and self.volt_cb.count() != 0:
       QMessageBox.warning(None, 'No Data', f'There is no {phantom.capitalize()} CTDI value for this voltage value.')
-    self.calculate(False)
+    # self.calculate(False)
 
   def on_coll_changed(self, sel):
-    self.coll = self.coll_query.record(sel).value("COL_VAL")
+    self.coll = self.coll_query.record(sel).value("VALUE")
     if not self.coll and self.coll_cb.count() != 0:
       QMessageBox.warning(None, 'No Data', 'There is no collimation data for this option.')
-    self.calculate(False)
+    # self.calculate(False)
 
   def on_tube_current_changed(self, sel):
     try:
       self.tube_current = float(sel)
     except ValueError:
       self.tube_current = 0
-    self.calculate(False)
+    # self.calculate(False)
 
   def on_rotation_time_changed(self, sel):
     try:
       self.rotation_time = float(sel)
     except ValueError:
       self.rotation_time = 1
-    self.calculate(False)
+    # self.calculate(False)
 
   def on_pitch_changed(self, sel):
     try:
       self.pitch = float(sel)
     except ValueError:
       self.pitch = 1
-    self.calculate(False)
+    # self.calculate(False)
 
   def on_scan_length_changed(self, sel):
     try:
       self.scan_length = float(sel)
     except ValueError:
       self.scan_length = 0
-    self.calculate(False)
+    # self.calculate(False)
 
   def on_dlp_changed(self, sel):
     try:
@@ -406,7 +477,7 @@ class CTDIVolTab(QDialog):
     self.set_app_data()
 
   def img_changed_handle(self, value):
-    if value:
+    if value and self.mode==2:
       self.calculate(False)
 
   def calculate(self, auto=True):
