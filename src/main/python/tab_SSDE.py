@@ -354,6 +354,9 @@ class SSDETab(QDialog):
     self.update_values()
 
   def get_idxs(self):
+    if not self.ctx.isImage:
+      self.idxs = [0]
+      return
     dcms = np.array(self.ctx.dicoms)
     index = list(range(len(dcms)))
     idxs = index
@@ -527,3 +530,6 @@ class SSDETab(QDialog):
     print('ctdi', self.ctx.app_data.CTDIvs)
     print('diameter', self.ctx.app_data.diameters)
     print('ssde', self.ctx.app_data.SSDEs)
+    print('cf', self.ctx.app_data.convfs)
+    print('dlpc', self.ctx.app_data.dlpcs)
+    print('efd', self.ctx.app_data.effdoses)
