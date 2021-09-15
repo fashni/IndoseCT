@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QDate, QRegExp, QTimer, pyqtSignal
+from PyQt5.QtCore import QDate, QRegExp, QTimer, pyqtSignal, Qt
 from PyQt5.QtGui import QRegExpValidator, QValidator
 from PyQt5.QtWidgets import (QAbstractSpinBox, QComboBox, QDateEdit,
                              QFormLayout, QGridLayout, QHBoxLayout, QLabel,
@@ -49,6 +49,7 @@ class InfoPanel(QWidget):
     self.scanner_validator = RegExpValidator(reg_ex, self.scanner_edit)
 
     self.scanner_edit.setValidator(self.scanner_validator)
+    self.scanner_edit.setAlignment(Qt.AlignLeft)
     self.scanner_edit.setPlaceholderText('Manufacturer-Model')
     self.sex_edit.addItems(['M', 'F', 'Unspecified'])
     self.sex_edit.setPlaceholderText('Unspecified')

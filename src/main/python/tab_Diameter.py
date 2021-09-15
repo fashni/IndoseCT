@@ -22,7 +22,7 @@ class DiameterTab(QDialog):
     super(DiameterTab, self).__init__(*args, **kwargs)
     self.baseon_items = ['Effective Diameter (Deff)', 'Water Equivalent Diameter (Dw)']
     self.src_method_items = {
-      'Get from Image': ['Auto', 'Auto (3D)', 'Manual'],
+      'Get from Image': ['Auto', 'Auto (Z-axis)', 'Manual'],
       'Input Manually': ['Manual'],
     }
 
@@ -208,7 +208,7 @@ class DiameterTab(QDialog):
     slice_layout.addWidget(self.slice2_sb)
     slice_layout.addStretch()
 
-    self.d_3d_grpbox = QGroupBox('3D Options', self)
+    self.d_3d_grpbox = QGroupBox('Z-axis Options', self)
     d_3d_layout = QVBoxLayout()
     [d_3d_layout.addWidget(btn) for btn in self.d_3d_rbtns]
     d_3d_layout.addLayout(slice_layout)
@@ -462,6 +462,9 @@ class DiameterTab(QDialog):
     self.bone_sb.valueChanged.connect(self.on_bone_limit_changed)
     self.stissue_sb.valueChanged.connect(self.on_stissue_limit_changed)
     self.ctx.app_data.imgChanged.connect(self.img_changed_handle)
+    self.ctx.app_data.mode3dChanged.connect(self.mode3d_handle)
+    self.ctx.app_data.slice1Changed.connect(self.slice1_handle)
+    self.ctx.app_data.slice2Changed.connect(self.slice2_handle)
     [btn.toggled.connect(self.on_deff_auto_method_changed) for btn in self.deff_auto_rbtns]
     [btn.toggled.connect(self.on_3d_opts_changed) for btn in self.d_3d_rbtns]
     self.plot_chk.stateChanged.connect(self.on_show_graph_check)
@@ -658,6 +661,7 @@ class DiameterTab(QDialog):
     self.stissue_limit = self.stissue_sb.value()
 
   def on_calculate(self):
+    self.ctx.app_data.d_mode = 0
     if self.source == 0: # from img
       if not self.ctx.isImage:
         QMessageBox.warning(None, "Warning", "Open DICOM files first.")
@@ -665,6 +669,7 @@ class DiameterTab(QDialog):
       if self.method == 0: # auto
         self.calculate_auto()
       elif self.method == 1: # 3d
+        self.ctx.app_data.d_mode = 1
         self.calculate_auto_3d()
       elif self.method == 2: # manual
         self.calculate_img_manual()
@@ -718,6 +723,8 @@ class DiameterTab(QDialog):
 
     self.d_edit.setText(f'{dval:#.2f}')
     self.ctx.app_data.diameter = dval
+    self.ctx.app_data.diameters[self.ctx.current_img] = dval
+    self.ctx.app_data.emit_d_changed()
 
     if isinstance(self.par.window_width, int) and isinstance(self.par.window_level, int) and correction==0:
       img_to_show = windowing(img_to_show, self.par.window_width, self.par.window_level)
@@ -752,6 +759,9 @@ class DiameterTab(QDialog):
     self.d_edit.setText(f'{avg_dval:#.2f}')
     self.ctx.app_data.diameter = avg_dval
     self.idxs = [i+1 for i in idxs]
+    for k, v in zip(self.idxs, self.d_vals):
+      self.ctx.app_data.diameters[k] = v
+    self.ctx.app_data.emit_d_changed()
     if self.show_graph:
       self.plot_3d_auto()
 
@@ -816,8 +826,6 @@ class DiameterTab(QDialog):
           QMessageBox.information(None, "Information",
             f"The result is an extrapolated value.\nFor the best result, input value between {data[0,0]} and {data[-1,0]}.")
         dval = float(interpolate.splev(val1, interp))
-      self.d_edit.setText(f'{dval:#.2f}')
-      self.ctx.app_data.diameter = dval
 
       if self.show_graph:
         self.figure = PlotDialog()
@@ -831,7 +839,13 @@ class DiameterTab(QDialog):
         self.figure.setTitle(f'{label} - Deff')
         self.figure.show()
     else:
-      pass
+      dval = float(self.d_edit.text())
+    self.d_edit.setText(f'{dval:#.2f}')
+    self.ctx.app_data.diameter = dval
+    self.idxs = range(1, self.ctx.total_img+1)
+    for idx in self.idxs:
+      self.ctx.app_data.diameters[idx] = dval
+    self.ctx.app_data.emit_d_changed()
 
   def clearROIs(self):
     if len(self.ctx.axes.rois) == 0:
@@ -1005,19 +1019,37 @@ class DiameterTab(QDialog):
     dval = np.sqrt(self.lineAP * self.lineLAT)
     self.d_edit.setText(f'{dval:#.2f}')
     self.ctx.app_data.diameter = dval
+    self.ctx.app_data.diameters[self.ctx.current_img] = dval
+    self.ctx.app_data.emit_d_changed()
 
   def get_dw_from_ellipse(self, roi):
     dims = self.ctx.img_dims
     rd = self.ctx.recons_dim
     img = roi.getArrayRegion(self.ctx.get_current_img(), self.ctx.axes.image, returnMappedCoords=False)
+    if img.size == 0:
+      return
     mask = roi.renderShapeMask(img.shape[0],img.shape[1])
+    if not mask.any():
+      return
     dval = get_dw_value(img, mask, dims, rd)
     self.d_edit.setText(f'{dval:#.2f}')
     self.ctx.app_data.diameter = dval
+    self.ctx.app_data.diameters[self.ctx.current_img] = dval
+    self.ctx.app_data.emit_d_changed()
 
   def img_changed_handle(self, value):
     if value:
       self.reset_fields()
+
+  def mode3d_handle(self, value):
+    rb = [r for r in self.d_3d_rbtns if r.text().lower()==value]
+    rb[0].setChecked(True)
+
+  def slice1_handle(self, value):
+    self.slice1_sb.setValue(value)
+
+  def slice2_handle(self, value):
+    self.slice2_sb.setValue(value)
 
   def reset_fields(self):
     self.initVar()

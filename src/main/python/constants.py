@@ -1,5 +1,3 @@
-TITLE = 'IndoseCT v20b.21'
-
 DW = 0
 DEFF_IMAGE = 1
 DEFF_MANUAL = 2

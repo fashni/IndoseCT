@@ -179,7 +179,7 @@ class Axes(pg.PlotWidget):
     self.clearPoly()
 
   def imageHoverEvent(self, event):
-    if event.isExit():
+    if event.isExit() or len(self.imagedata.shape)!=2:
       self.setTitle("")
       return
     pos = event.pos()
@@ -215,6 +215,8 @@ class Axes(pg.PlotWidget):
       self.double_click_event_bak = self.image.mouseDoubleClickEvent
       self.image.mouseClickEvent = self.mouse_click_event
       self.image.mouseDoubleClickEvent = self.mouse_double_click_event
+      vb = self.image.getViewBox()
+      vb.setCursor(Qt.CrossCursor)
       self.poly = pg.PolyLineROI(positions=[(0, 0)])
       self.addItem(self.poly)
       self.poly.clearPoints()
@@ -230,6 +232,8 @@ class Axes(pg.PlotWidget):
     if event.button()==1 and 'poly_pos' in self.graphs.keys():
       self.image.mouseClickEvent = self.click_event_bak
       self.image.mouseDoubleClickEvent = self.double_click_event_bak
+      vb = self.image.getViewBox()
+      vb.unsetCursor()
       self.poly.setPoints(self.poly_pts_pos, closed=True)
       self.rois.append('poly')
       self.clear_graph('poly_pos')
@@ -909,13 +913,14 @@ class PlotOptions(QDialog):
 
 class ImageViewDialog(QDialog):
   pg.setConfigOptions(antialias=True)
-  def __init__(self, size=(640, 480), unit=None, *args, **kwargs):
+  def __init__(self, size=(640, 480), unit=(None, None), *args, **kwargs):
     super(ImageViewDialog, self).__init__(*args, **kwargs)
     self.setAttribute(Qt.WA_DeleteOnClose)
     self.setWindowFlags(self.windowFlags() |
                         Qt.WindowSystemMenuHint |
                         Qt.WindowMinMaxButtonsHint)
-    self.unit = 'value' if unit is None else unit
+    self.measure = 'value' if unit[0] is None else unit[0]
+    self.unit = '' if unit[1] is None else unit[1]
     self.resize(size[0], size[1])
     self.initUI()
     self.sigConnect()
@@ -978,7 +983,7 @@ class ImageViewDialog(QDialog):
     i = int(np.clip(i, 0, self.image_data.shape[0] - 1))
     j = int(np.clip(j, 0, self.image_data.shape[1] - 1))
     val = self.image_data[j, i]
-    self.plot_item.setTitle(f"location: ({i:#d}, {j:#d})  {self.unit}: {val:#g}")
+    self.plot_item.setTitle(f"location: ({i:#d}, {j:#d})  {self.measure}: {val:#g}{self.unit}")
 
 
 if __name__ == '__main__':

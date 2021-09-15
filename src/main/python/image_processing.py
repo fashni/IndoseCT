@@ -13,7 +13,10 @@ def get_hu_imgs(scans):
   return imgs
 
 def get_hu_img(ds):
-  img = ds.pixel_array*ds.RescaleSlope + ds.RescaleIntercept
+  try:
+    img = ds.pixel_array*ds.RescaleSlope + ds.RescaleIntercept
+  except:
+    return
   return np.array(img, dtype=np.int16)
 
 def get_dicom(*args, **kwargs):
@@ -22,7 +25,7 @@ def get_dicom(*args, **kwargs):
   except InvalidDicomError as e:
     kwargs['force'] = True
     dcm = pydicom.dcmread(*args, **kwargs)
-  if not hasattr(dcm.file_meta, 'TransferSyntaxUID'):
+  if not hasattr(dcm.file_meta, 'TransferSyntaxUID'): # Assume transder syntax
     dcm.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2' # Implicit VR Endian
     # dcm.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1' # Explicit VR Little Endian
     # dcm.file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1.99' # Deflated Explicit VR Little Endian

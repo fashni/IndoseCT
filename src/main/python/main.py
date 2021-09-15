@@ -3,17 +3,18 @@ import os
 import sys
 
 import numpy as np
+import qimage2ndarray
 from fbs_runtime.application_context.PyQt5 import (ApplicationContext,
                                                    cached_property)
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon, QIntValidator
+from PyQt5.QtGui import QIcon, QIntValidator
 from PyQt5.QtSql import QSqlTableModel
-from PyQt5.QtWidgets import (QAbstractSpinBox, QAction, QApplication,
+from PyQt5.QtWidgets import (QAbstractSpinBox, QAction,
                              QComboBox, QDesktopWidget, QFileDialog,
                              QHBoxLayout, QLabel, QLineEdit, QMainWindow,
                              QMessageBox, QProgressDialog, QPushButton,
                              QShortcut, QSizePolicy, QSpinBox, QSplitter,
-                             QTabWidget, QToolBar, QVBoxLayout, QWidget)
+                             QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 import Plot as plt
 from AppConfig import AppConfig
@@ -41,6 +42,7 @@ class MainWindow(QMainWindow):
     self.initVar()
     self.initModel()
     self.initUI()
+    self.ctx.axes.imshow(self.ctx.app_logo)
 
   def initVar(self):
     self.ctx.initVar()
@@ -61,12 +63,12 @@ class MainWindow(QMainWindow):
     self.ctx.windowing_model.insertRecord(-1, record)
 
   def initUI(self):
-    self.title = TITLE
+    self.title = self.ctx.build_settings["app_name"] + " v" + self.ctx.build_settings["version"].split('.')[0]
     self.icon = None
     self._top = 0
     self._left = 0
     self._width = 1280
-    self._height = 680
+    self._height = 700
     self.setUIComponents()
 
   def setUIComponents(self):
@@ -98,6 +100,8 @@ class MainWindow(QMainWindow):
     self.open_sample_btn.triggered.connect(self.on_open_sample)
     self.dcmtree_btn.triggered.connect(self.on_dcmtree)
     self.settings_btn.triggered.connect(self.on_open_config)
+    self.help_btn_en.triggered.connect(lambda a: self.on_help('en'))
+    self.help_btn_id.triggered.connect(lambda a: self.on_help('id'))
     self.save_btn.triggered.connect(self.on_save_db)
     self.openrec_btn.triggered.connect(self.on_open_viewer)
     self.next_btn.triggered.connect(self.on_next_img)
@@ -137,11 +141,24 @@ class MainWindow(QMainWindow):
     self.settings_btn = QAction(self.ctx.setting_icon, 'Settings', self)
     self.settings_btn.setStatusTip('Application Settings')
 
+    self.help_btn_en = QAction(self.ctx.help_icon, 'English', self)
+    self.help_btn_id = QAction(self.ctx.help_icon, 'Bahasa Indonesia', self)
+
+    self.help_act = QToolButton(self)
+    self.help_act.setIcon(self.ctx.help_icon)
+    self.help_act.setShortcut('F1')
+    self.help_act.setToolTip('Open User Manual')
+    self.help_act.setStatusTip('Open User Manual')
+    self.help_act.setPopupMode(QToolButton.InstantPopup)
+    self.help_act.addAction(self.help_btn_en)
+    self.help_act.addAction(self.help_btn_id)
+
     toolbar.addAction(self.open_btn)
     toolbar.addAction(self.open_folder_btn)
     toolbar.addAction(self.open_sample_btn)
     toolbar.addAction(self.dcmtree_btn)
     toolbar.addAction(self.settings_btn)
+    toolbar.addWidget(self.help_act)
 
     rec_ctrl = QToolBar('Records Control')
     self.addToolBar(rec_ctrl)
@@ -161,10 +178,10 @@ class MainWindow(QMainWindow):
 
     self.next_btn = QAction(self.ctx.next_icon, 'Next Slice', self)
     self.next_btn.setStatusTip('Next Slice')
-    self.next_btn.setShortcut(Qt.Key_Down)
+    self.next_btn.setShortcut(Qt.Key_Up)
     self.prev_btn = QAction(self.ctx.prev_icon, 'Previous Slice', self)
     self.prev_btn.setStatusTip('Previous Slice')
-    self.prev_btn.setShortcut(Qt.Key_Up)
+    self.prev_btn.setShortcut(Qt.Key_Down)
     self.close_img_btn = QAction(self.ctx.close_img_icon, 'Close Images', self)
     self.close_img_btn.setStatusTip('Close all images')
     self.close_img_btn.setEnabled(False)
@@ -284,7 +301,7 @@ class MainWindow(QMainWindow):
       self._load_files(filenames)
 
   def on_open_files(self):
-    filenames, _ = QFileDialog.getOpenFileNames(self,"Open Files", "", "DICOM Files (*.dcm);;All Files (*)")
+    filenames, _ = QFileDialog.getOpenFileNames(self,"Open Files", "", "All Files (*);;DICOM Files (*.dcm)")
     if filenames:
       self.fsource = 'files'
       self._load_files(filenames)
@@ -296,6 +313,17 @@ class MainWindow(QMainWindow):
       self._load_files(filenames)
     else:
       QMessageBox.information(None, "Info", "No DICOM files in sample directory.")
+
+  def filter_invalid(self, ds):
+    discarded_count = 0
+    valid = []
+    for d in ds:
+      try:
+        type(d.pixel_array)
+        valid.append(d)
+      except:
+        discarded_count+=1
+    return valid, discarded_count
 
   def _load_files(self, fnames):
     if self.ctx.isImage:
@@ -325,7 +353,11 @@ class MainWindow(QMainWindow):
       return
 
     self.ctx.isImage = True
-    self.ctx.dicoms = files
+    self.ctx.dicoms, dc = self.filter_invalid(files)
+    if dc>0:
+      f = 'files' if dc>1 else 'file'
+      QMessageBox.warning(None, "Unsupported format", f"Cannot load {dc} {f}.")
+
     self.ctx.total_img = len(self.ctx.dicoms)
     self.total_lbl.setText(str(self.ctx.total_img))
     self.ctx.current_img = 1
@@ -344,17 +376,19 @@ class MainWindow(QMainWindow):
     self.close_img_btn.setEnabled(True)
     self.windowing_cb.setEnabled(True)
     self.sort_btn.setEnabled(True)
-    if self.ctdiv_tab.mode == 2:
-      self.ctdiv_tab.calculate()
     self.adjust_slices()
 
   def adjust_slices(self):
-    self.diameter_tab.slice1_sb.setValue(self.ctx.current_img)
-    self.diameter_tab.slice1_sb.setMaximum(self.ctx.total_img)
-    self.diameter_tab.slice1_sb.setMinimum(1)
-    self.diameter_tab.slice2_sb.setValue(self.ctx.current_img)
-    self.diameter_tab.slice2_sb.setMaximum(self.ctx.total_img)
-    self.diameter_tab.slice2_sb.setMinimum(1)
+    slice_sbs = [self.ctdiv_tab.calc_slice1_sb, self.ctdiv_tab.calc_slice2_sb,
+                 self.ctdiv_tab.dcm_slice1_sb, self.ctdiv_tab.dcm_slice2_sb,
+                 self.diameter_tab.slice1_sb, self.diameter_tab.slice2_sb,
+                 self.ssde_tab.slice1_sb, self.ssde_tab.slice2_sb,]
+    for slice_sb in slice_sbs:
+      slice_sb.setMaximum(self.ctx.total_img)
+      slice_sb.setMinimum(1)
+      slice_sb.setValue(self.ctx.current_img)
+    self.ctx.app_data.slice1 = self.ctx.current_img
+    self.ctx.app_data.slice2 = self.ctx.current_img
 
   def get_patient_info(self):
     ref = self.ctx.dicoms[0]
@@ -456,6 +490,7 @@ class MainWindow(QMainWindow):
     self.info_panel.initVar()
     self.info_panel.setInfo(self.info_panel.getInfo())
     self.ctx.axes.clearAll()
+    self.ctx.axes.imshow(self.ctx.app_logo)
     self.dcmtree_btn.setEnabled(False)
     self.close_img_btn.setEnabled(False)
     self.windowing_cb.setEnabled(False)
@@ -525,12 +560,19 @@ class MainWindow(QMainWindow):
       self.ctx.records_count = get_records_num(self.ctx.patients_database(), 'PATIENTS')
       self.analyze_tab.set_filter()
 
+  def on_help(self, lang='en'):
+    try:
+      os.startfile(self.ctx.help_file(lang))
+    except:
+      QMessageBox.information(None, "Not yet available", "Sorry, the user manual is not available for now.")
+
   def on_save_db(self):
     btn_reply = QMessageBox.question(self, 'Save Record', 'Are you sure want to save the record?')
     if btn_reply == QMessageBox.No:
       return
+    data = self.ssde_tab.display
     self.patient_info = self.info_panel.getInfo()
-    if self.ctx.app_data.diameter:
+    if data['diameter']:
       d_mode = 'Deff' if self.ctx.app_data.mode else 'Dw'
     else:
       d_mode = None
@@ -544,13 +586,13 @@ class MainWindow(QMainWindow):
       self.patient_info['brand'],
       self.patient_info['model'],
       self.patient_info['protocol'],    # 'protocol'
-      self.ctx.app_data.CTDIv or None,   # 'CTDIVol'
-      self.ctx.app_data.diameter or None,    # 'DE_WED'
+      data['ctdi'],   # 'CTDIVol'
+      data['diameter'],    # 'DE_WED'
       d_mode,
-      self.ctx.app_data.SSDE or None,   # 'SSDE'
-      self.ctx.app_data.DLP or None,    # 'DLP'
-      self.ctx.app_data.DLPc or None,   # 'DLPc'
-      self.ctx.app_data.effdose or None   # 'Effective_Dose'
+      data['ssde'],   # 'SSDE'
+      data['dlp'],    # 'DLP'
+      data['dlpc'],   # 'DLPc'
+      data['effdose']   # 'Effective_Dose'
     ]
     print(recs)
     if None in recs:
@@ -717,6 +759,14 @@ class AppContext(ApplicationContext):
     return QIcon(self.get_resource("assets/icons/snippet.png"))
 
   @cached_property
+  def help_icon(self):
+    return QIcon(self.get_resource("assets/icons/help.png"))
+
+  # @cached_property
+  def help_file(self, lang='id'):
+    return self.get_resource(f"assets/files/user_guide_{lang}.pdf")
+
+  @cached_property
   def sample_dir(self):
     return self.get_resource("assets/dicom_sample")
 
@@ -744,6 +794,10 @@ class AppContext(ApplicationContext):
   def hk_data(self):
     return self.get_resource("assets/db/DataHdanK.wt")
 
+  @cached_property
+  def app_logo(self):
+    return qimage2ndarray.imread(self.get_resource("assets/img/logo.png"))
+
   def config_file(self):
     return os.path.join(self.app_data_dir(), 'config.json')
 
@@ -763,6 +817,12 @@ class AppData(QObject):
   DLPValueChanged = pyqtSignal(object)
   SSDEValueChanged = pyqtSignal(object)
   imgChanged = pyqtSignal(bool)
+  mode3dChanged = pyqtSignal(str)
+  slice1Changed = pyqtSignal(int)
+  slice2Changed = pyqtSignal(int)
+  diametersUpdated = pyqtSignal(bool)
+  ctdivsUpdated = pyqtSignal(bool)
+  ssdesUpdated = pyqtSignal(bool)
 
   def __init__(self, parent=None):
     super(AppData, self).__init__(parent)
@@ -777,9 +837,58 @@ class AppData(QObject):
     self._SSDE = 0
     self.effdose = 0
     self.convf = 0
+    self.c_mode = 0 # one slice
+    self.d_mode = 0
+    self.s_mode = 0
+    self.CTDIvs = {}
+    self.diameters = {}
+    self.SSDEs = {}
+    self.convfs = {}
+    self.idxs = []
+    self.dlpcs = {}
+    self.effdoses = {}
+    self._mode3d = 'slice step'
+    self._slice1 = 1
+    self._slice2 = 1
 
   def emit_img_changed(self):
     self.imgChanged.emit(True)
+
+  def emit_d_changed(self):
+    self.diametersUpdated.emit(True)
+
+  def emit_c_changed(self):
+    self.ctdivsUpdated.emit(True)
+
+  def emit_s_changed(self):
+    self.ssdesUpdated.emit(True)
+
+  @property
+  def mode3d(self):
+    return self._mode3d
+
+  @mode3d.setter
+  def mode3d(self, value):
+    self._mode3d = value
+    self.mode3dChanged.emit(value)
+
+  @property
+  def slice1(self):
+    return self._slice1
+
+  @slice1.setter
+  def slice1(self, value):
+    self._slice1 = value
+    self.slice1Changed.emit(value)
+
+  @property
+  def slice2(self):
+    return self._slice2
+
+  @slice2.setter
+  def slice2(self, value):
+    self._slice2 = value
+    self.slice2Changed.emit(value)
 
   @property
   def mode(self):
