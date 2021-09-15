@@ -36,6 +36,7 @@ class DiameterTab(QDialog):
     self.is_no_roi = False
     self.is_no_table = False
     self.is_corr = [False, False]
+    self.all_slices = False
     self.minimum_area = 500
     self.threshold = -300
     self.bone_limit = 250
@@ -108,10 +109,12 @@ class DiameterTab(QDialog):
     self.method_cb = QComboBox()
     self.calculate_btn = QPushButton('Calculate')
     self.plot_chk = QCheckBox('Show Graph')
+    self.all_slices_chk = QCheckBox('All Slices')
     self.d_edit = QLineEdit(f'{self.ctx.app_data.diameter}')
     self.next_tab_btn = QPushButton('Next')
     self.prev_tab_btn = QPushButton('Previous')
 
+    self.all_slices_chk.setVisible(False)
     self.baseon_cb.addItems(self.baseon_items)
     self.source_cb.addItems(self.src_method_items.keys())
     self.method_cb.addItems(self.src_method_items[list(self.src_method_items.keys())[0]])
@@ -133,6 +136,11 @@ class DiameterTab(QDialog):
     out_layout.addWidget(QLabel('cm'))
     out_layout.addStretch()
 
+    chk_layout = QHBoxLayout()
+    chk_layout.addWidget(self.plot_chk)
+    chk_layout.addWidget(self.all_slices_chk)
+    chk_layout.addStretch()
+
     menu_layout = QVBoxLayout()
     menu_layout.addWidget(QLabel('Based on:'))
     menu_layout.addWidget(self.baseon_cb)
@@ -142,7 +150,7 @@ class DiameterTab(QDialog):
     menu_layout.addWidget(self.method_cb)
     menu_layout.addWidget(QLabel(''))
     menu_layout.addLayout(out_layout)
-    menu_layout.addWidget(self.plot_chk)
+    menu_layout.addLayout(chk_layout)
     menu_layout.addStretch()
 
     self.menu_grpbox = QGroupBox('', self)
@@ -193,11 +201,11 @@ class DiameterTab(QDialog):
     [self.d_3d_btngrp.addButton(btn) for btn in self.d_3d_rbtns]
 
     self.slice_step_rbtn.setChecked(True)
-    self.slice1_sb.setMinimum(1)
     self.slice1_sb.setMaximum(self.ctx.total_img)
+    self.slice1_sb.setMinimum(1)
     self.slice1_sb.setMinimumWidth(50)
-    self.slice2_sb.setMinimum(1)
     self.slice2_sb.setMaximum(self.ctx.total_img)
+    self.slice2_sb.setMinimum(1)
     self.slice2_sb.setMinimumWidth(50)
     self.to_lbl.setHidden(True)
     self.slice2_sb.setHidden(True)
@@ -461,6 +469,7 @@ class DiameterTab(QDialog):
     self.lung_chk.stateChanged.connect(self.on_corr_check)
     self.bone_sb.valueChanged.connect(self.on_bone_limit_changed)
     self.stissue_sb.valueChanged.connect(self.on_stissue_limit_changed)
+    self.ctx.app_data.imgLoaded.connect(self.img_loaded_handle)
     self.ctx.app_data.imgChanged.connect(self.img_changed_handle)
     self.ctx.app_data.mode3dChanged.connect(self.mode3d_handle)
     self.ctx.app_data.slice1Changed.connect(self.slice1_handle)
@@ -468,6 +477,16 @@ class DiameterTab(QDialog):
     [btn.toggled.connect(self.on_deff_auto_method_changed) for btn in self.deff_auto_rbtns]
     [btn.toggled.connect(self.on_3d_opts_changed) for btn in self.d_3d_rbtns]
     self.plot_chk.stateChanged.connect(self.on_show_graph_check)
+    self.all_slices_chk.stateChanged.connect(self.on_all_slices)
+
+  def on_all_slices(self, state):
+    self.all_slices = state == Qt.Checked
+
+  def img_loaded_handle(self, state):
+    if not state:
+      self.all_slices = False
+      self.all_slices_chk.setChecked(False)
+    self.all_slices_chk.setEnabled(state)
 
   def on_show_graph_check(self, state):
     self.show_graph = state == Qt.Checked
@@ -566,6 +585,7 @@ class DiameterTab(QDialog):
       self.d_edit.textChanged.disconnect(self._on_dw_manual)
     except:
       pass
+    self.all_slices_chk.setVisible(self.source==1)
     if self.source == 1:# and (self.sender().tag is 'source' or self.sender().tag is 'based'):
       if self.baseon == 0 and self.method == 0:
         self.plot_chk_handle(True)
@@ -842,9 +862,12 @@ class DiameterTab(QDialog):
       dval = float(self.d_edit.text())
     self.d_edit.setText(f'{dval:#.2f}')
     self.ctx.app_data.diameter = dval
-    self.idxs = range(1, self.ctx.total_img+1)
-    for idx in self.idxs:
-      self.ctx.app_data.diameters[idx] = dval
+    if self.all_slices:
+      self.idxs = list(range(1, self.ctx.total_img+1))
+      for idx in self.idxs:
+        self.ctx.app_data.diameters[idx] = dval
+    else:
+      self.ctx.app_data.diameters[self.ctx.current_img] = dval
     self.ctx.app_data.emit_d_changed()
 
   def clearROIs(self):

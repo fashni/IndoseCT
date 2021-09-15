@@ -77,6 +77,9 @@ class SSDETab(QDialog):
     self.effdose_model.select()
 
   def initUI(self):
+    self.hidden_btn = QPushButton('check') # for debug
+    self.hidden_btn.setVisible(False)
+
     self.figure = PlotDialog()
     self.protocol_cb = QComboBox()
     self.protocol_cb.setModel(self.protocol_model)
@@ -96,11 +99,11 @@ class SSDETab(QDialog):
     self.slice2_sb = QSpinBox()
     self.to_lbl = QLabel('to')
 
-    self.slice1_sb.setMinimum(1)
     self.slice1_sb.setMaximum(self.ctx.total_img)
+    self.slice1_sb.setMinimum(1)
     self.slice1_sb.setMinimumWidth(50)
-    self.slice2_sb.setMinimum(1)
     self.slice2_sb.setMaximum(self.ctx.total_img)
+    self.slice2_sb.setMinimum(1)
     self.slice2_sb.setMinimumWidth(50)
     self.to_lbl.setHidden(True)
     self.slice2_sb.setHidden(True)
@@ -197,6 +200,7 @@ class SSDETab(QDialog):
 
     tab_nav = QHBoxLayout()
     tab_nav.addWidget(self.prev_tab_btn)
+    tab_nav.addWidget(self.hidden_btn)
     tab_nav.addStretch()
     tab_nav.addWidget(self.next_tab_btn)
 
@@ -214,12 +218,11 @@ class SSDETab(QDialog):
     self.setLayout(main_layout)
 
   def sigConnect(self):
+    self.hidden_btn.clicked.connect(self.on_check)
     self.protocol_cb.activated[int].connect(self.on_protocol_changed)
     self.report_cb.activated[int].connect(self.on_report_changed)
     self.calc_btn.clicked.connect(self.on_calculate)
     self.ctx.app_data.modeValueChanged.connect(self.diameter_mode_handle)
-    # self.ctx.app_data.diameterValueChanged.connect(self.diameter_handle)
-    # self.ctx.app_data.CTDIValueChanged.connect(self.ctdiv_handle)
     self.ctx.app_data.diametersUpdated.connect(self.update_values)
     self.ctx.app_data.ctdivsUpdated.connect(self.update_values)
     self.ctx.app_data.DLPValueChanged.connect(self.dlp_handle)
@@ -519,3 +522,8 @@ class SSDETab(QDialog):
     self.ssde_edit.setText(f'{0:#.2f}')
     self.dlpc_edit.setText(f'{0:#.2f}')
     self.effdose_edit.setText(f'{0:#.2f}')
+
+  def on_check(self):
+    print('ctdi', self.ctx.app_data.CTDIvs)
+    print('diameter', self.ctx.app_data.diameters)
+    print('ssde', self.ctx.app_data.SSDEs)

@@ -104,8 +104,6 @@ class CTDIVolTab(QDialog):
     self.scan_length_c_edit.textChanged[str].connect(self.on_scan_length_changed)
     self.ctdiv_m_edit.textChanged[str].connect(self.on_ctdiv_changed)
     self.dlp_m_edit.textChanged[str].connect(self.on_dlp_changed)
-    # self.scan_length_d_edit.textChanged[str].connect(self.on_dicom_manual)
-    # self.ctdiv_d_edit.textChanged[str].connect(self.on_dicom_manual)
     self.tcm_btn.clicked.connect(self.on_get_tcm)
     self.scn_btn.clicked.connect(self.get_scan_length_dicom)
     self.get_info_btn.clicked.connect(self.on_get_info)
@@ -113,6 +111,7 @@ class CTDIVolTab(QDialog):
     self.calc_dcm_btn.clicked.connect(self.calculate_dcm)
     self.calc_man_btn.clicked.connect(self.calculate_man)
     self.ctx.app_data.imgChanged.connect(self.img_changed_handle)
+    self.ctx.app_data.imgLoaded.connect(self.img_loaded_handle)
     self.show_graph_ctd_chk.stateChanged.connect(self.on_show_graph_ctd_state)
     self.show_graph_tcm_chk.stateChanged.connect(self.on_show_graph_tcm_state)
     self.show_graph_ctd_dcm_chk.stateChanged.connect(self.on_show_graph_ctd_dcm_state)
@@ -187,19 +186,19 @@ class CTDIVolTab(QDialog):
     self.dcm_d3opts_rbtns = [QRadioButton('Slice Step'), QRadioButton('Slice Number'), QRadioButton('Regional')]
     self.dcm_d3opts_rbtns[0].setChecked(True)
 
-    self.calc_slice1_sb.setMinimum(1)
     self.calc_slice1_sb.setMaximum(self.ctx.total_img)
+    self.calc_slice1_sb.setMinimum(1)
     self.calc_slice1_sb.setMinimumWidth(50)
-    self.calc_slice2_sb.setMinimum(1)
     self.calc_slice2_sb.setMaximum(self.ctx.total_img)
+    self.calc_slice2_sb.setMinimum(1)
     self.calc_slice2_sb.setMinimumWidth(50)
     self.calc_to_lbl.setHidden(True)
     self.calc_slice2_sb.setHidden(True)
-    self.dcm_slice1_sb.setMinimum(1)
     self.dcm_slice1_sb.setMaximum(self.ctx.total_img)
+    self.dcm_slice1_sb.setMinimum(1)
     self.dcm_slice1_sb.setMinimumWidth(50)
-    self.dcm_slice2_sb.setMinimum(1)
     self.dcm_slice2_sb.setMaximum(self.ctx.total_img)
+    self.dcm_slice2_sb.setMinimum(1)
     self.dcm_slice2_sb.setMinimumWidth(50)
     self.dcm_to_lbl.setHidden(True)
     self.dcm_slice2_sb.setHidden(True)
@@ -682,6 +681,12 @@ class CTDIVolTab(QDialog):
     if value:
       self.switch_button_default()
 
+  def img_loaded_handle(self, state):
+    if not state:
+      self.all_slices_man = False
+      self.all_slices_man_chk.setChecked(False)
+    self.all_slices_man_chk.setEnabled(state)
+
   def on_mode_man_changed(self, state):
     self.all_slices_man = state==Qt.Checked
 
@@ -830,6 +835,8 @@ class CTDIVolTab(QDialog):
         imgs = dcms
         idxs = index
       idxs = self.calc_all_slices(idxs, imgs)
+      if idxs is None:
+        return
       self.idxs = [i+1 for i in idxs]
       for k, v in zip(self.idxs, self.ctdivs):
         self.ctx.app_data.CTDIvs[k] = v
@@ -934,8 +941,6 @@ class CTDIVolTab(QDialog):
       self.DLP = float(self.dlp_m_edit.text())
     except:
       self.DLP = 0
-    if self.ctx.total_img < 1:
-      return
     if self.all_slices_man:
       for idx in range(1, self.ctx.total_img+1):
         self.ctx.app_data.CTDIvs[idx] = ctdi
@@ -993,7 +998,6 @@ class CTDIVolTab(QDialog):
     else:
       self.ctdiv_m_edit.setText('0')
       self.dlp_m_edit.setText('0')
-    self.all_slices_man_chk.setChecked(False)
     self.tube_current_edit.setText(f'{self.tube_current:#.2f}')
     self.rotation_time_edit.setText(f'{self.rotation_time:#.2f}')
     self.pitch_edit.setText(f'{self.pitch:#.2f}')

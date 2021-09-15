@@ -43,6 +43,7 @@ class MainWindow(QMainWindow):
     self.initModel()
     self.initUI()
     self.ctx.axes.imshow(self.ctx.app_logo)
+    self.ctx.app_data.emit_img_loaded(False)
 
   def initVar(self):
     self.ctx.initVar()
@@ -326,8 +327,8 @@ class MainWindow(QMainWindow):
     return valid, discarded_count
 
   def _load_files(self, fnames):
-    if self.ctx.isImage:
-      self.on_close_image()
+    # if self.ctx.isImage:
+    self.on_close_image()
     self.statusBar().showMessage('Loading Images')
     n = len(fnames)
     progress = QProgressDialog(f"Loading {n} images...", "Cancel", 0, n, self)
@@ -362,6 +363,7 @@ class MainWindow(QMainWindow):
     self.total_lbl.setText(str(self.ctx.total_img))
     self.ctx.current_img = 1
     self.update_image()
+    self.ctx.app_data.emit_img_loaded(True)
 
     self.go_to_slice_sb.setValue(self.ctx.current_img)
     self.go_to_slice_sb.setMinimum(self.ctx.current_img)
@@ -620,6 +622,7 @@ class MainWindow(QMainWindow):
     self.diameter_tab.reset_fields()
     self.ssde_tab.reset_fields()
     self.organ_tab.reset_fields()
+    self.ctx.app_data.emit_img_loaded(False)
     # self.analyze_tab.reset_fields()
 
   def closeEvent(self, event):
@@ -817,6 +820,7 @@ class AppData(QObject):
   DLPValueChanged = pyqtSignal(object)
   SSDEValueChanged = pyqtSignal(object)
   imgChanged = pyqtSignal(bool)
+  imgLoaded = pyqtSignal(bool)
   mode3dChanged = pyqtSignal(str)
   slice1Changed = pyqtSignal(int)
   slice2Changed = pyqtSignal(int)
@@ -850,6 +854,9 @@ class AppData(QObject):
     self._mode3d = 'slice step'
     self._slice1 = 1
     self._slice2 = 1
+
+  def emit_img_loaded(self, state):
+    self.imgLoaded.emit(state)
 
   def emit_img_changed(self):
     self.imgChanged.emit(True)
