@@ -821,6 +821,7 @@ class AppData(QObject):
   SSDEValueChanged = pyqtSignal(object)
   imgChanged = pyqtSignal(bool)
   imgLoaded = pyqtSignal(bool)
+  sliceOptChanged = pyqtSignal(int)
   mode3dChanged = pyqtSignal(str)
   slice1Changed = pyqtSignal(int)
   slice2Changed = pyqtSignal(int)
@@ -841,7 +842,7 @@ class AppData(QObject):
     self._SSDE = 0
     self.effdose = 0
     self.convf = 0
-    self.c_mode = 0 # one slice
+    self._c_mode = 0 # one slice
     self.d_mode = 0
     self.s_mode = 0
     self.CTDIvs = {}
@@ -869,6 +870,15 @@ class AppData(QObject):
 
   def emit_s_changed(self):
     self.ssdesUpdated.emit(True)
+
+  @property
+  def c_mode(self):
+    return self._c_mode
+
+  @c_mode.setter
+  def c_mode(self, value):
+    self._c_mode = value
+    self.sliceOptChanged.emit(value)
 
   @property
   def mode3d(self):

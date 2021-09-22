@@ -19,7 +19,6 @@ class SSDETab(QDialog):
     self.show_graph = False
     self.show_ssde_graph = False
     self.all_slices = False
-    self.use_avg = False
     self.d3_method = 'slice step'
     self.current_idx = 0
     self.initVar()
@@ -88,7 +87,6 @@ class SSDETab(QDialog):
     self.report_cb.setModel(self.report_model)
     self.report_cb.setModelColumn(self.report_model.fieldIndex('name'))
     self.plot_chk = QCheckBox('Show Graph')
-    self.avg_chk = QCheckBox('Use Avg. Value')
     self.show_ssde_graph_chk = QCheckBox('Show SSDE Graph')
 
     self.d3_opts_cb = QComboBox()
@@ -178,7 +176,6 @@ class SSDETab(QDialog):
     # left_layout.addRow(QLabel('<b>Option</b>'), self.d3_opts_cb)
     left_layout.addRow(self.calc_btn, self.plot_chk)
     left_layout.addRow(QLabel(''))
-    # left_layout.addRow(self.calc_btn, self.avg_chk)
     # left_layout.addRow(QLabel(''), self.plot_chk)
     left_layout.addRow(self.save_btn, QLabel(''))
     left_grpbox.setLayout(left_layout)
@@ -227,11 +224,11 @@ class SSDETab(QDialog):
     self.ctx.app_data.ctdivsUpdated.connect(self.update_values)
     self.ctx.app_data.DLPValueChanged.connect(self.dlp_handle)
     self.ctx.app_data.imgChanged.connect(self.img_changed_handle)
+    self.ctx.app_data.sliceOptChanged.connect(self.sliceopt_handle)
     self.ctx.app_data.mode3dChanged.connect(self.mode3d_changed_handle)
     self.ctx.app_data.slice1Changed.connect(self.slice1_changed_handle)
     self.ctx.app_data.slice2Changed.connect(self.slice2_changed_handle)
     self.plot_chk.stateChanged.connect(self.on_show_graph_check)
-    self.avg_chk.stateChanged.connect(self.on_avg_check)
     self.show_ssde_graph_chk.stateChanged.connect(self.on_show_ssde_graph_check)
     self.d3_opts_cb.activated[int].connect(self.on_mode_changed)
     [btn.toggled.connect(self.on_3d_opts_changed) for btn in self.d3opts_rbtns]
@@ -312,11 +309,12 @@ class SSDETab(QDialog):
   def on_show_graph_check(self, state):
     self.show_graph = state == Qt.Checked
 
-  def on_avg_check(self, state):
-    self.use_avg = state == Qt.Checked
-
   def on_show_ssde_graph_check(self, state):
     self.show_ssde_graph = state == Qt.Checked
+
+  def sliceopt_handle(self, value):
+    self.d3_opts_cb.setCurrentIndex(value)
+    self.on_mode_changed(value)
 
   def mode3d_changed_handle(self, value):
     rb = [r for r in self.d3opts_rbtns if r.text().lower()==value]
@@ -382,25 +380,25 @@ class SSDETab(QDialog):
       return
 
     if not self.all_slices:
-      if self.use_avg:
-        self.ctx.app_data.SSDE = self.ctx.app_data.convf * self.ctx.app_data.CTDIv
-      else:
-        try:
-          self.diameter = self.ctx.app_data.diameters[self.ctx.current_img]
-          self.CTDIv = self.ctx.app_data.CTDIvs[self.ctx.current_img]
-        except:
-          QMessageBox.warning(None, "No Data", f"No CTDIv and diameter data for slice {self.ctx.current_img}.\nCalculate them first.")
-          return
-        self.convf = self.cf_eq(self.diameter)
-        self.SSDE = self.convf * self.CTDIv
-        self.DLPc = self.convf * self.ctx.app_data.DLP
-        self.effdose = self.ctx.app_data.DLP * np.exp(self.alfa*self.diameter + self.beta)
+      # if self.use_avg:
+        # self.ctx.app_data.SSDE = self.ctx.app_data.convf * self.ctx.app_data.CTDIv
+      # else:
+      try:
+        self.diameter = self.ctx.app_data.diameters[self.ctx.current_img]
+        self.CTDIv = self.ctx.app_data.CTDIvs[self.ctx.current_img]
+      except:
+        QMessageBox.warning(None, "No Data", f"No CTDIv and diameter data for slice {self.ctx.current_img}.\nCalculate them first.")
+        return
+      self.convf = self.cf_eq(self.diameter)
+      self.SSDE = self.convf * self.CTDIv
+      self.DLPc = self.convf * self.ctx.app_data.DLP
+      self.effdose = self.ctx.app_data.DLP * np.exp(self.alfa*self.diameter + self.beta)
 
-        self.ctx.app_data.convfs[self.ctx.current_img] = self.convf
-        self.ctx.app_data.SSDEs[self.ctx.current_img] = self.SSDE
-        self.ctx.app_data.dlpcs[self.ctx.current_img] = self.DLPc
-        self.ctx.app_data.effdoses[self.ctx.current_img] = self.effdose
-        self.ctx.app_data.emit_s_changed()
+      self.ctx.app_data.convfs[self.ctx.current_img] = self.convf
+      self.ctx.app_data.SSDEs[self.ctx.current_img] = self.SSDE
+      self.ctx.app_data.dlpcs[self.ctx.current_img] = self.DLPc
+      self.ctx.app_data.effdoses[self.ctx.current_img] = self.effdose
+      self.ctx.app_data.emit_s_changed()
     else:
       ctdivs = []
       diameters = []
@@ -512,11 +510,9 @@ class SSDETab(QDialog):
     self.ctx.app_data.DLPc = 0
     self.ctx.app_data.effdose = 0
     self.show_graph = False
-    self.use_avg = False
-    self.d3_opts_cb.setCurrentIndex(0)
-    self.on_mode_changed(0)
+    # self.d3_opts_cb.setCurrentIndex(0)
+    # self.on_mode_changed(0)
     self.plot_chk.setCheckState(Qt.Unchecked)
-    self.avg_chk.setCheckState(Qt.Unchecked)
     self.switch_button_default()
     self.ctdiv_edit.setText(f'{0:#.2f}')
     self.diameter_edit.setText(f'{0:#.2f}')

@@ -19,6 +19,14 @@ class CTDIVolTab(QDialog):
     self.method = 0
     self.calc_3d_method = 'slice step'
     self.dcm_3d_method = 'slice step'
+    self.all_slices = False
+    self.all_slices_dcm = False
+    self.all_slices_man = False
+    self.show_graph_ctd = False
+    self.show_graph_tcm = False
+    self.show_graph_ctd_dcm = False
+    self.show_graph_tcm_dcm = False
+    self.adjust_tcm = False
     self.initVar()
     self.initModel()
     self.initUI()
@@ -40,14 +48,6 @@ class CTDIVolTab(QDialog):
     self.idxs = []
     self.currents = []
     self.ctdivs = []
-    self.all_slices = False
-    self.all_slices_dcm = False
-    self.all_slices_man = False
-    self.show_graph_ctd = False
-    self.show_graph_tcm = False
-    self.show_graph_ctd_dcm = False
-    self.show_graph_tcm_dcm = False
-    self.adjust_tcm = False
     self.disable_warning = False
 
   def initModel(self):
@@ -160,7 +160,7 @@ class CTDIVolTab(QDialog):
     self.get_info_btn = QPushButton('Get Info')
     self.calc_btn = QPushButton('Calculate')
     self.calc_dcm_btn = QPushButton('Calculate')
-    self.calc_man_btn = QPushButton('Submit')
+    self.calc_man_btn = QPushButton('Input')
     self.tcm_btn = QPushButton('TCM')
     self.scn_btn = QPushButton('Scn Len')
     self.next_tab_btn = QPushButton('Next')
@@ -689,6 +689,7 @@ class CTDIVolTab(QDialog):
 
   def on_mode_man_changed(self, state):
     self.all_slices_man = state==Qt.Checked
+    self.ctx.app_data.c_mode = int(self.all_slices_man)
 
   def on_mode_dcm_changed(self, idx):
     self.all_slices_dcm = idx==1
@@ -876,28 +877,24 @@ class CTDIVolTab(QDialog):
       self.ctx.app_data.slice1 = nslice
       if self.dcm_3d_method  == 'slice step':
         idxs = index[::nslice]
-        imgs = dcms[::nslice]
       elif self.dcm_3d_method  == 'slice number':
         tmps = np.array_split(np.arange(len(dcms)), nslice)
         idxs = [tmp[len(tmp)//2] for tmp in tmps]
-        imgs = dcms[idxs]
       elif self.dcm_3d_method  == 'regional':
         nslice2 = self.dcm_slice2_sb.value()
         self.ctx.app_data.slice2 = nslice2
         first = nslice if nslice<=nslice2 else nslice2
         last = nslice2 if nslice<=nslice2 else nslice
         idxs = index[first-1:last]
-        imgs = dcms[first-1:last]
       else:
-        imgs = dcms
         idxs = index
     else:
-      imgs = dcms
       idxs = index
 
     if self.adjust_tcm:
       self.ctdivs = (self.ctdivs * self.currents) / self.currents.mean()
 
+    self.currents = self.currents[idxs]
     self.ctdivs = self.ctdivs[idxs]
     self.CTDIv = self.ctdivs.mean()
     curidx = idxs.index(self.ctx.current_img-1) if self.ctx.current_img-1 in idxs else None
@@ -983,21 +980,9 @@ class CTDIVolTab(QDialog):
     self.initVar()
     self.switch_button_default()
     self.disable_warning = True
-    if self.method == 0:
-      self.brand_cb.setCurrentIndex(0)
-      self.scanner_cb.setCurrentIndex(0)
-      self.volt_cb.setCurrentIndex(0)
-      self.coll_cb.setCurrentIndex(0)
-      self.on_brand_changed(0)
-      self.mode_calc_cb.setCurrentIndex(0)
-      self.on_mode_calc_changed(0)
-    elif self.method == 1:
-      self.reset_dcm()
-      self.mode_dcm_cb.setCurrentIndex(0)
-      self.on_mode_dcm_changed(0)
-    else:
-      self.ctdiv_m_edit.setText('0')
-      self.dlp_m_edit.setText('0')
+    self.reset_dcm()
+    self.ctdiv_m_edit.setText('0')
+    self.dlp_m_edit.setText('0')
     self.tube_current_edit.setText(f'{self.tube_current:#.2f}')
     self.rotation_time_edit.setText(f'{self.rotation_time:#.2f}')
     self.pitch_edit.setText(f'{self.pitch:#.2f}')

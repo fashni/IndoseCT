@@ -360,6 +360,7 @@ class DiameterTab(QDialog):
     self.no_roi_chk = QCheckBox('Without ROI')
     self.no_table_chk = QCheckBox('Remove table')
     self.dw_auto_grpbox = QGroupBox('Options', self)
+    self.no_table_chk.setEnabled(False)
 
     self.dw_threshold_sb.setRange(np.iinfo('int16').min, np.iinfo('int16').max)
     self.dw_threshold_sb.setValue(self.threshold)
@@ -471,6 +472,7 @@ class DiameterTab(QDialog):
     self.stissue_sb.valueChanged.connect(self.on_stissue_limit_changed)
     self.ctx.app_data.imgLoaded.connect(self.img_loaded_handle)
     self.ctx.app_data.imgChanged.connect(self.img_changed_handle)
+    self.ctx.app_data.sliceOptChanged.connect(self.sliceopt_handle)
     self.ctx.app_data.mode3dChanged.connect(self.mode3d_handle)
     self.ctx.app_data.slice1Changed.connect(self.slice1_handle)
     self.ctx.app_data.slice2Changed.connect(self.slice2_handle)
@@ -481,6 +483,7 @@ class DiameterTab(QDialog):
 
   def on_all_slices(self, state):
     self.all_slices = state == Qt.Checked
+    self.ctx.app_data.d_mode = int(self.all_slices)
 
   def img_loaded_handle(self, state):
     if not state:
@@ -1063,6 +1066,13 @@ class DiameterTab(QDialog):
   def img_changed_handle(self, value):
     if value:
       self.reset_fields()
+
+  def sliceopt_handle(self, value):
+    self.source_cb.setCurrentIndex(0)
+    src = self.source_cb.currentText()
+    self.on_source_changed(src)
+    self.method_cb.setCurrentIndex(value)
+    self.on_set_opts_panel()
 
   def mode3d_handle(self, value):
     rb = [r for r in self.d_3d_rbtns if r.text().lower()==value]
