@@ -209,6 +209,12 @@ class Axes(pg.PlotWidget):
       self.addItem(self.ellipse)
       self.rois.append('ellipse')
 
+  def applyPoly(self, poly):
+    if self.poly is None and self.imagedata is not None:
+      self.poly = poly
+      self.rois.append('poly')
+      self.addItem(self.poly)
+
   def addPoly(self):
     if self.poly is None and self.imagedata is not None:
       self.click_event_bak = self.image.mouseClickEvent
@@ -963,6 +969,15 @@ class ImageViewDialog(QDialog):
     self.imv.setImage(img)
     img_flat = img.flatten()
     self.imv.setLevels(min=np.min(img_flat[np.nonzero(img_flat)]), max=np.max(img_flat))
+
+  def add_roi(self, roi):
+    handles = roi.getHandles()
+    positions = []
+    for h in handles:
+      pos = (h.pos().x(), h.pos().y())
+      positions.append(pos)
+    r = pg.PolyLineROI(positions=positions, closed=True)
+    self.plot_item.addItem(r)
 
   def set_cmap(self, colors):
     cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)

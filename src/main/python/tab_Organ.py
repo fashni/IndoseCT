@@ -1,6 +1,7 @@
+from PyQt5.QtGui import QFontMetrics
 import numpy as np
 import scipy.io as scio
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtSql import QSqlTableModel
 from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGridLayout, QGroupBox,
                              QHBoxLayout, QLabel, QLineEdit, QMessageBox,
@@ -19,29 +20,37 @@ class OrganTab(QWidget):
     self.ctx = ctx
     self.alfas = None
     self.betas = None
-    self.organ_dose = None
+    self.organ_dose_db = None
     self.organ_names = []
     self.fig = {}
+    self.is_quick_mode = False
+    self.show_hk = False
+    self.show_dosemap = False
+    self.show_distmap = False
+    self.show_dosedist = False
     self.initModel()
     self.initVar()
     self.initUI()
     self.sigConnect()
 
   def initVar(self):
-    self.is_quick_mode = False
-    self.show_dosemap = False
-    self.show_distmap = False
-    self.show_dosedist = False
-    self.show_hk = False
-    self.ssdec = 0
-    self.ssdep = 0
     self.dist_map = None
     self.dose_map = None
+    self.poly = None
+    self.ssdec = 0
+    self.ssdep = 0
     self.organ_dose_mean = 0
     self.organ_dose_std = 0
     self.diameter = 0
     self.ssde = 0
     self.ctdi = 0
+    self.ssdecs = {}
+    self.ssdeps = {}
+    self.means = {}
+    self.stds = {}
+    self.dist_maps = {}
+    self.dose_maps = {}
+    self.polys = {}
 
   def initModel(self):
     self.protocol_model = QSqlTableModel(db=self.ctx.database.ssde_db)
@@ -222,7 +231,7 @@ class OrganTab(QWidget):
     self.figure.setTitle('Organ Dose')
     self.figure.axes.showGrid(False,True)
     self.figure.setLabels('', 'Dose' ,'', 'mGy')
-    self.figure.bar(x=list(xdict.keys()), height=self.organ_dose, width=.8, brush='g')
+    self.figure.bar(x=list(xdict.keys()), height=self.organ_dose_db, width=.8, brush='g')
     self.figure.show()
 
   def plot_cnt(self, dose_vec):
@@ -271,6 +280,7 @@ class OrganTab(QWidget):
     self.fig[key] = ImageViewDialog(unit=unit)
     self.fig[key].setTitle(title)
     self.fig[key].imshow(img)
+    self.fig[key].add_roi(self.poly)
     self.fig[key].show()
 
   def getData(self):
@@ -280,6 +290,8 @@ class OrganTab(QWidget):
   def diameter_mode_handle(self, value):
     self.dist_map = None
     self.dose_map = None
+    self.dist_maps = {}
+    self.dose_maps = {}
     self.add_cnt_btn.setEnabled(True)
     self.add_cnt_btn.setText('Add Contour')
     if value == DW:
@@ -319,8 +331,8 @@ class OrganTab(QWidget):
     print(self.protocol_id, self.protocol_model.record(idx).value("name"))
 
   def on_calculate_db(self):
-    self.organ_dose = self.ctx.app_data.CTDIv * np.exp(self.alfas*self.ctx.app_data.diameter + self.betas)
-    [self.organ_edits[idx].setText(f'{dose:#.2f}') for idx, dose in enumerate(self.organ_dose)]
+    self.organ_dose_db = self.ctx.app_data.CTDIv * np.exp(self.alfas*self.ctx.app_data.diameter + self.betas)
+    [self.organ_edits[idx].setText(f'{dose:#.2f}') for idx, dose in enumerate(self.organ_dose_db)]
     self.plot()
 
   def get_ssde(self):
@@ -329,6 +341,8 @@ class OrganTab(QWidget):
     self.ssdep = k(self.diameter)*self.ssde
     self.ssdec_edit.setText(f'{self.ssdec:#.2f}')
     self.ssdep_edit.setText(f'{self.ssdep:#.2f}')
+    self.ssdecs[self.ctx.current_img] = self.ssdec
+    self.ssdeps[self.ctx.current_img] = self.ssdep
 
   def build_dose_map(self):
     from functools import partial
@@ -377,26 +391,29 @@ class OrganTab(QWidget):
     self.dose_map = np.zeros_like(mask, dtype=float)
     self.dist_map[tuple(mask_pos.T)] = dist_vec
     self.dose_map[tuple(mask_pos.T)] = dose_vec
+    self.dist_maps[self.ctx.current_img] = self.dist_map
+    self.dose_maps[self.ctx.current_img] = self.dose_map
 
   def on_calculate_cnt(self):
     if self.ctx.axes.poly is None:
       QMessageBox.warning(None, "Warning", "Organ contour not found.")
       return
-    # if self.ctx.app_data.diameter==0 or self.ctx.app_data.SSDE==0:
-    #   QMessageBox.warning(None, "Warning", "Diameter and SSDE value not found.")
-    #   return
 
+    self.poly = self.ctx.axes.poly
+    self.polys[self.ctx.current_img] = self.poly
     self.get_ssde()
     if self.dose_map is None:
       self.build_dose_map()
     if self.dose_map is None:
       return
 
-    organ_dose_map = self.ctx.axes.poly.getArrayRegion(self.dose_map, self.ctx.axes.image, returnMappedCoords=False)
+    organ_dose_map = self.poly.getArrayRegion(self.dose_map, self.ctx.axes.image, returnMappedCoords=False)
     organ_dose_mask_pos = np.argwhere(organ_dose_map!=0)
     organ_dose_vec = organ_dose_map[tuple(organ_dose_mask_pos.T)]
     self.organ_dose_mean = organ_dose_vec.mean()
     self.organ_dose_std = organ_dose_vec.std()
+    self.means[self.ctx.current_img] = self.organ_dose_mean
+    self.stds[self.ctx.current_img] = self.organ_dose_std
     self.mean_edit.setText(f'{self.organ_dose_mean:#.2f}')
     self.std_edit.setText(f'{self.organ_dose_std:#.2f}')
     if self.show_hk:
@@ -420,6 +437,14 @@ class OrganTab(QWidget):
       self.calc_cnt_btn.setEnabled(False)
     else:
       self.ctx.axes.clearPoly()
+      self.poly = None
+      self.polys.pop(self.ctx.current_img, None)
+      self.means.pop(self.ctx.current_img, None)
+      self.stds.pop(self.ctx.current_img, None)
+      self.organ_dose_mean = 0
+      self.organ_dose_std = 0
+      self.mean_edit.setText(f'{self.organ_dose_mean:#.2f}')
+      self.std_edit.setText(f'{self.organ_dose_std:#.2f}')
       self.add_cnt_btn.setText("Add Contour")
 
   def get_organ_mask(self, roi, dose_map):
@@ -462,10 +487,21 @@ class OrganTab(QWidget):
     self.diameter = self.ctx.app_data.diameters[self.ctx.current_img] if self.ctx.current_img in self.ctx.app_data.diameters.keys() else 0
     self.ctdi = self.ctx.app_data.CTDIvs[self.ctx.current_img] if self.ctx.current_img in self.ctx.app_data.CTDIvs.keys() else 0
     self.ssde = self.ctx.app_data.SSDEs[self.ctx.current_img] if self.ctx.current_img in self.ctx.app_data.SSDEs.keys() else 0
-    self.ssdec = 0
-    self.ssdep = 0
-    self.organ_dose_mean = 0
-    self.organ_dose_std = 0
+    self.ssdec = self.ssdecs[self.ctx.current_img] if self.ctx.current_img in self.ssdecs.keys() else 0
+    self.ssdep = self.ssdeps[self.ctx.current_img] if self.ctx.current_img in self.ssdeps.keys() else 0
+    self.organ_dose_mean = self.means[self.ctx.current_img] if self.ctx.current_img in self.means.keys() else 0
+    self.organ_dose_std = self.stds[self.ctx.current_img] if self.ctx.current_img in self.stds.keys() else 0
+    self.dist_map = self.dist_maps[self.ctx.current_img] if self.ctx.current_img in self.dist_maps.keys() else None
+    self.dose_map = self.dose_maps[self.ctx.current_img] if self.ctx.current_img in self.dose_maps.keys() else None
+
+    if self.ctx.current_img in self.polys.keys():
+      self.poly = self.polys[self.ctx.current_img]
+      self.ctx.axes.applyPoly(self.poly)
+      self.add_cnt_btn.setText("Clear Contour")
+    else:
+      self.poly = None
+      self.add_cnt_btn.setText("Add Contour")
+
     self.diameter_edit.setText(f'{self.diameter:#.2f}')
     self.ctdiv_edit.setText(f'{self.ctdi:#.2f}')
     self.ssdew_edit.setText(f'{self.ssde:#.2f}')
@@ -473,7 +509,6 @@ class OrganTab(QWidget):
     self.ssdep_edit.setText(f'{self.ssdep:#.2f}')
     self.mean_edit.setText(f'{self.organ_dose_mean:#.2f}')
     self.std_edit.setText(f'{self.organ_dose_std:#.2f}')
-
 
   def reset_fields(self):
     [organ_edit.setText('0') for organ_edit in self.organ_edits]
@@ -484,11 +519,4 @@ class OrganTab(QWidget):
     self.calc_cnt_btn.setEnabled(True)
     self.add_cnt_btn.setEnabled(True)
     self.add_cnt_btn.setText('Add Contour')
-    self.ssdec_edit.setText('0')
-    self.ssdep_edit.setText('0')
-    self.mean_edit.setText('0')
-    self.std_edit.setText('0')
-    self.is_quick_mode_chk.setCheckState(Qt.Unchecked)
-    self.show_hk_chk.setCheckState(Qt.Unchecked)
-    self.show_dosemap_chk.setCheckState(Qt.Unchecked)
-    self.show_dosedist_chk.setCheckState(Qt.Unchecked)
+    self.update_values()
